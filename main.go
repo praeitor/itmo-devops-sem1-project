@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
@@ -151,6 +152,37 @@ func unzipArchive(fileBytes []byte) ([][]string, error) {
 		}
 	}
 	return records, nil
+}
+
+// Логика получения данных из базы в виде zip-архива
+func getPricesHandler(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query("SELECT product_id, created_at, product_name, category, price FROM prices")
+	if err != nil {
+		http.Error(w, "Failed to fetch data", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var buffer bytes.Buffer
+	writer := csv.NewWriter(&buffer)
+	writer.Write([]string{"Product ID", "Created At", "Product Name", "Category", "Price"})
+
+	for rows.Next() {
+		var productID int
+		var createdAt, productName, category string
+		var price float64
+		rows.Scan(&productID, &createdAt, &productName, &category, &price)
+		writer.Write([]string{strconv.Itoa(productID), createdAt, productName, category, fmt.Sprintf("%.2f", price)})
+	}
+	writer.Flush()
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
+
+	zipWriter := zip.NewWriter(w)
+	fileWriter, _ := zipWriter.Create("data.csv")
+	fileWriter.Write(buffer.Bytes())
+	zipWriter.Close()
 }
 
 func main() {
