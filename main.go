@@ -140,8 +140,16 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
-	writer.Write([]string{"id", "name", "category", "price", "create_date"})
+	defer writer.Flush()
 
+	// Пишем заголовки
+	err = writer.Write([]string{"id", "name", "category", "price", "create_date"})
+	if err != nil {
+		http.Error(w, "Error writing CSV header", http.StatusInternalServerError)
+		return
+	}
+
+	// Извлекаем данные из базы данных
 	rows, err := db.Query("SELECT id, name, category, price, create_date FROM prices")
 	if err != nil {
 		http.Error(w, "Error fetching data from database", http.StatusInternalServerError)
@@ -152,19 +160,30 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id, name, category, createDate string
 		var price float64
+
 		err = rows.Scan(&id, &name, &category, &price, &createDate)
 		if err != nil {
-			log.Printf("Failed to read row: %v", err)
-			continue
+			http.Error(w, "Error reading row from database", http.StatusInternalServerError)
+			return
 		}
-		writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), createDate})
+
+		err = writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), createDate})
+		if err != nil {
+			http.Error(w, "Error writing row to CSV", http.StatusInternalServerError)
+			return
+		}
 	}
+
 	writer.Flush()
+	if err := writer.Error(); err != nil {
+		http.Error(w, "Error finalizing CSV file", http.StatusInternalServerError)
+		return
+	}
 
 	// Создаем ZIP-архив
 	zipFile, err := os.Create("data.zip")
 	if err != nil {
-		http.Error(w, "Error creating zip file", http.StatusInternalServerError)
+		http.Error(w, "Error creating ZIP file", http.StatusInternalServerError)
 		return
 	}
 	defer zipFile.Close()
@@ -191,7 +210,11 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	zipWriter.Close()
+
+	// Отправляем архив клиенту
 	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
 	http.ServeFile(w, r, "data.zip")
 }
 
