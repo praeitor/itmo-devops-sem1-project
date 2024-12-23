@@ -79,6 +79,30 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Data uploaded successfully"))
 }
 
+func handleGetPrices(w http.ResponseWriter, r *http.Request) {
+	file, _ := os.Create("data.csv")
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	writer.Write([]string{"id", "name", "category", "price", "create_date"})
+	rows, _ := db.Query("SELECT id, name, category, price, create_date FROM prices")
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, name, category, date string
+		var price float64
+		rows.Scan(&id, &name, &category, &price, &date)
+		writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), date})
+	}
+	writer.Flush()
+
+	zipFile, _ := os.Create("data.zip")
+	defer zipFile.Close()
+
+	w.Header().Set("Content-Type", "application/zip")
+	http.ServeFile(w, r, "data.zip")
+}
+
 func main() {
 	initDB()
 	r := mux.NewRouter()
