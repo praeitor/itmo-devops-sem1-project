@@ -3,7 +3,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 
+	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
@@ -19,6 +21,20 @@ func initDB() {
 	fmt.Println("Database connected successfully")
 }
 
+func handlePostPrices(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("POST /api/v0/prices endpoint"))
+}
+
+func handleGetPrices(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("GET /api/v0/prices endpoint"))
+}
+
 func main() {
 	initDB()
+	r := mux.NewRouter()
+	r.HandleFunc("/api/v0/prices", handlePostPrices).Methods("POST")
+	r.HandleFunc("/api/v0/prices", handleGetPrices).Methods("GET")
+	http.ListenAndServe(":8080", r)
 }
