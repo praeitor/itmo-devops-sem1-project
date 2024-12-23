@@ -36,7 +36,7 @@ func initDB() {
 	if err = db.Ping(); err != nil {
 		log.Fatalf("Database not reachable: %v", err)
 	}
-	fmt.Println("✅ Database connected successfully")
+	fmt.Println("Database connected successfully")
 }
 
 // Обработчик POST /api/v0/prices
