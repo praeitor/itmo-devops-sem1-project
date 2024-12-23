@@ -4,10 +4,12 @@ import (
 	"archive/zip"
 	"database/sql"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -35,34 +37,77 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	zipFilePath := "uploaded.zip"
-	tempFile, _ := os.Create(zipFilePath)
+	tempFile, err := os.Create(zipFilePath)
+	if err != nil {
+		http.Error(w, "Error creating temporary file", http.StatusInternalServerError)
+		return
+	}
 	defer tempFile.Close()
-	tempFile.ReadFrom(file)
 
-	zipReader, _ := zip.OpenReader(zipFilePath)
+	_, err = io.Copy(tempFile, file)
+	if err != nil {
+		http.Error(w, "Error saving file", http.StatusInternalServerError)
+		return
+	}
+
+	zipReader, err := zip.OpenReader(zipFilePath)
+	if err != nil {
+		http.Error(w, "Error reading zip file", http.StatusInternalServerError)
+		return
+	}
 	defer zipReader.Close()
 
+	var totalItems int
+	var totalPrice float64
+	categorySet := make(map[string]bool)
+
 	for _, f := range zipReader.File {
-		if f.Name == "data.csv" {
-			csvFile, _ := f.Open()
+		if f.Name == "test_data.csv" || f.Name == "data.csv" {
+			csvFile, err := f.Open()
+			if err != nil {
+				http.Error(w, "Error opening CSV file", http.StatusInternalServerError)
+				return
+			}
 			defer csvFile.Close()
+
 			reader := csv.NewReader(csvFile)
-			reader.Read() // Пропускаем заголовок
+			_, err = reader.Read() // Skip header
+			if err != nil {
+				http.Error(w, "Error reading CSV header", http.StatusInternalServerError)
+				return
+			}
 
 			for {
 				record, err := reader.Read()
 				if err != nil {
 					break
 				}
-				price := record[3]
-				db.Exec("INSERT INTO prices (id, name, category, price, create_date) VALUES ($1, $2, $3, $4, $5)",
-					record[0], record[1], record[2], price, record[4])
+
+				price, _ := strconv.ParseFloat(record[3], 64)
+				category := record[2]
+
+				_, err = db.Exec("INSERT INTO prices (id, name, category, price, create_date) VALUES ($1, $2, $3, $4, $5)",
+					record[0], record[1], category, price, record[4])
+				if err != nil {
+					http.Error(w, "Error inserting data into database", http.StatusInternalServerError)
+					return
+				}
+
+				totalItems++
+				totalPrice += price
+				categorySet[category] = true
 			}
 		}
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Data uploaded successfully"))
+	summary := Summary{
+		TotalItems:      totalItems,
+		TotalCategories: len(categorySet),
+		TotalPrice:      totalPrice,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(summary)
 }
 
 func handleGetPrices(w http.ResponseWriter, r *http.Request) {
