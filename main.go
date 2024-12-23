@@ -111,35 +111,57 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetPrices(w http.ResponseWriter, r *http.Request) {
-	file, _ := os.Create("data.csv")
+	file, err := os.Create("data.csv")
+	if err != nil {
+		http.Error(w, "Error creating CSV file", http.StatusInternalServerError)
+		return
+	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
 	writer.Write([]string{"id", "name", "category", "price", "create_date"})
-	rows, _ := db.Query("SELECT id, name, category, price, create_date FROM prices")
+
+	rows, err := db.Query("SELECT id, name, category, price, create_date FROM prices")
+	if err != nil {
+		http.Error(w, "Error fetching data", http.StatusInternalServerError)
+		return
+	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var id, name, category, date string
+		var id, name, category, createDate string
 		var price float64
-		rows.Scan(&id, &name, &category, &price, &date)
-		writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), date})
+		rows.Scan(&id, &name, &category, &price, &createDate)
+		writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), createDate})
 	}
 	writer.Flush()
 
-	zipFile, _ := os.Create("data.zip")
+	zipFile, err := os.Create("data.zip")
+	if err != nil {
+		http.Error(w, "Error creating zip file", http.StatusInternalServerError)
+		return
+	}
 	defer zipFile.Close()
 
 	zipWriter := zip.NewWriter(zipFile)
 	defer zipWriter.Close()
 
-	csvFile, _ := os.Open("data.csv")
+	csvFile, err := os.Open("data.csv")
+	if err != nil {
+		http.Error(w, "Error opening CSV file for zipping", http.StatusInternalServerError)
+		return
+	}
 	defer csvFile.Close()
 
-	wr, _ := zipWriter.Create("data.csv")
-	_, err := io.Copy(wr, csvFile)
+	wr, err := zipWriter.Create("data.csv")
 	if err != nil {
-		http.Error(w, "Failed to write to zip", http.StatusInternalServerError)
+		http.Error(w, "Error creating zip entry", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = io.Copy(wr, csvFile)
+	if err != nil {
+		http.Error(w, "Error writing to zip", http.StatusInternalServerError)
 		return
 	}
 
