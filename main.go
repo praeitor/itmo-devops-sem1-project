@@ -1,9 +1,13 @@
 package main
 
 import (
+	"archive/zip"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -22,19 +26,62 @@ func initDB() {
 }
 
 func handlePostPrices(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("POST /api/v0/prices endpoint"))
-}
+	r.ParseMultipartForm(10 << 20)
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
 
-func handleGetPrices(w http.ResponseWriter, r *http.Request) {
+	zipFilePath := "uploaded.zip"
+	tempFile, err := os.Create(zipFilePath)
+	if err != nil {
+		http.Error(w, "Error creating temporary file", http.StatusInternalServerError)
+		return
+	}
+	defer tempFile.Close()
+
+	_, err = tempFile.ReadFrom(file)
+	if err != nil {
+		http.Error(w, "Error saving file", http.StatusInternalServerError)
+		return
+	}
+
+	zipReader, err := zip.OpenReader(zipFilePath)
+	if err != nil {
+		http.Error(w, "Error reading zip file", http.StatusInternalServerError)
+		return
+	}
+	defer zipReader.Close()
+
+	for _, f := range zipReader.File {
+		if f.Name == "data.csv" {
+			csvFile, _ := f.Open()
+			defer csvFile.Close()
+
+			reader := csv.NewReader(csvFile)
+			reader.Read() // Skip header
+
+			for {
+				record, err := reader.Read()
+				if err != nil {
+					break
+				}
+				price, _ := strconv.ParseFloat(record[3], 64)
+				db.Exec("INSERT INTO prices (id, name, category, price, create_date) VALUES ($1, $2, $3, $4, $5)",
+					record[0], record[1], record[2], price, record[4])
+			}
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("GET /api/v0/prices endpoint"))
+	w.Write([]byte("Data uploaded successfully"))
 }
 
 func main() {
 	initDB()
 	r := mux.NewRouter()
 	r.HandleFunc("/api/v0/prices", handlePostPrices).Methods("POST")
-	r.HandleFunc("/api/v0/prices", handleGetPrices).Methods("GET")
 	http.ListenAndServe(":8080", r)
 }
