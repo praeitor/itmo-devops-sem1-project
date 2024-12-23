@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"database/sql"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,6 +16,12 @@ import (
 
 var db *sql.DB
 
+type Summary struct {
+	TotalItems      int     `json:"total_items"`
+	TotalCategories int     `json:"total_categories"`
+	TotalPrice      float64 `json:"total_price"`
+}
+
 func initDB() {
 	var err error
 	connStr := "user=validator password=val1dat0r dbname=project-sem-1 sslmode=disable"
@@ -22,7 +29,6 @@ func initDB() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Database connected successfully")
 }
 
 func handlePostPrices(w http.ResponseWriter, r *http.Request) {
@@ -57,11 +63,23 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 
 	for _, f := range zipReader.File {
 		if f.Name == "data.csv" {
-			csvFile, _ := f.Open()
+			csvFile, err := f.Open()
+			if err != nil {
+				http.Error(w, "Error opening CSV file", http.StatusInternalServerError)
+				return
+			}
 			defer csvFile.Close()
 
 			reader := csv.NewReader(csvFile)
-			reader.Read() // Skip header
+			_, err = reader.Read() // skip header
+			if err != nil {
+				http.Error(w, "Error reading CSV header", http.StatusInternalServerError)
+				return
+			}
+
+			var totalItems int
+			categorySet := make(map[string]bool)
+			var totalPrice float64
 
 			for {
 				record, err := reader.Read()
@@ -69,35 +87,68 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 				price, _ := strconv.ParseFloat(record[3], 64)
-				db.Exec("INSERT INTO prices (id, name, category, price, create_date) VALUES ($1, $2, $3, $4, $5)",
-					record[0], record[1], record[2], price, record[4])
+				category := record[2]
+
+				_, err = db.Exec("INSERT INTO prices (id, name, category, price, create_date) VALUES ($1, $2, $3, $4, $5)",
+					record[0], record[1], category, price, record[4])
+				if err != nil {
+					http.Error(w, "Error inserting data into database", http.StatusInternalServerError)
+					return
+				}
+
+				totalItems++
+				totalPrice += price
+				categorySet[category] = true
 			}
+
+			summary := Summary{
+				TotalItems:      totalItems,
+				TotalCategories: len(categorySet),
+				TotalPrice:      totalPrice,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(summary)
+			return
 		}
 	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Data uploaded successfully"))
 }
 
 func handleGetPrices(w http.ResponseWriter, r *http.Request) {
-	file, _ := os.Create("data.csv")
+	rows, err := db.Query("SELECT id, name, category, price, create_date FROM prices")
+	if err != nil {
+		http.Error(w, "Error fetching data", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	file, err := os.Create("data.csv")
+	if err != nil {
+		http.Error(w, "Error creating CSV file", http.StatusInternalServerError)
+		return
+	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
 	writer.Write([]string{"id", "name", "category", "price", "create_date"})
-	rows, _ := db.Query("SELECT id, name, category, price, create_date FROM prices")
-	defer rows.Close()
-
 	for rows.Next() {
-		var id, name, category, date string
+		var id, name, category, create_date string
 		var price float64
-		rows.Scan(&id, &name, &category, &price, &date)
-		writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), date})
+		rows.Scan(&id, &name, &category, &price, &create_date)
+		writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), create_date})
 	}
 	writer.Flush()
 
-	zipFile, _ := os.Create("data.zip")
-	defer zipFile.Close()
+	archive, _ := os.Create("data.zip")
+	defer archive.Close()
+	zipWriter := zip.NewWriter(archive)
+	defer zipWriter.Close()
+
+	csvFile, _ := os.Open("data.csv")
+	defer csvFile.Close()
+
+	wr, _ := zipWriter.Create("data.csv")
+	wr.ReadFrom(csvFile)
 
 	w.Header().Set("Content-Type", "application/zip")
 	http.ServeFile(w, r, "data.zip")
@@ -107,5 +158,6 @@ func main() {
 	initDB()
 	r := mux.NewRouter()
 	r.HandleFunc("/api/v0/prices", handlePostPrices).Methods("POST")
+	r.HandleFunc("/api/v0/prices", handleGetPrices).Methods("GET")
 	http.ListenAndServe(":8080", r)
 }
