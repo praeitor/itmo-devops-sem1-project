@@ -131,7 +131,7 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 
 // Обработчик GET /api/v0/prices
 func handleGetPrices(w http.ResponseWriter, r *http.Request) {
-	// Создание CSV-файла
+	// Создаем CSV файл
 	csvFilePath := "data.csv"
 	csvFile, err := os.Create(csvFilePath)
 	if err != nil {
@@ -143,7 +143,7 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	writer := csv.NewWriter(csvFile)
 	defer writer.Flush()
 
-	// Записываем заголовки в CSV
+	// Записываем заголовки CSV
 	err = writer.Write([]string{"id", "name", "category", "price", "create_date"})
 	if err != nil {
 		http.Error(w, "Error writing CSV header", http.StatusInternalServerError)
@@ -181,7 +181,7 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создание ZIP-архива
+	// Создаем ZIP-архив
 	zipFilePath := "data.zip"
 	zipFile, err := os.Create(zipFilePath)
 	if err != nil {
@@ -192,6 +192,7 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 
 	zipWriter := zip.NewWriter(zipFile)
 
+	// Открываем CSV для архива
 	csvFileForZip, err := os.Open(csvFilePath)
 	if err != nil {
 		http.Error(w, "Error opening CSV file for zipping", http.StatusInternalServerError)
@@ -218,19 +219,26 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверка файла перед отправкой
+	// Проверяем размер файла
 	stat, err := os.Stat(zipFilePath)
 	if err != nil || stat.Size() == 0 {
 		http.Error(w, "ZIP file is empty or inaccessible", http.StatusInternalServerError)
 		return
 	}
 
-	// Отправка файла клиенту
+	// Читаем ZIP в память для отправки
+	zipBytes, err := os.ReadFile(zipFilePath)
+	if err != nil {
+		http.Error(w, "Error reading ZIP file", http.StatusInternalServerError)
+		return
+	}
+
+	// Устанавливаем заголовки и отправляем файл
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(zipBytes)))
 
-	http.ServeFile(w, r, zipFilePath)
+	w.Write(zipBytes)
 }
 
 // Главная функция
