@@ -1,38 +1,50 @@
 #!/bin/bash
 
-# Скрипт для подготовки окружения и базы данных
+set -e
 
-# Настройки базы данных
-DB_NAME="project_sem_1" 
-DB_USER="validator"
-DB_PASSWORD="val1dat0r"
+echo "Installing PostgreSQL and dependencies..."
 
-# Установка зависимостей
-echo "Installing dependencies..."
-sudo apt update
-sudo apt install -y postgresql golang
+# Установка PostgreSQL
+sudo apt-get update
+sudo apt-get install -y postgresql postgresql-contrib
 
-# Запуск PostgreSQL
-echo "Starting PostgreSQL..."
-sudo systemctl start postgresql
+echo "Starting PostgreSQL service..."
 sudo systemctl enable postgresql
+sudo systemctl start postgresql
 
-# Создание пользователя и базы данных
-echo "Setting up PostgreSQL database..."
+# Проверка статуса PostgreSQL
+if ! sudo systemctl is-active --quiet postgresql; then
+    echo "Error: PostgreSQL failed to start"
+    exit 1
+fi
 
-sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
-sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+echo "Configuring PostgreSQL..."
 
-# Создание таблицы в базе данных
-echo "Creating table in PostgreSQL..."
-sudo -u postgres psql -d $DB_NAME -c "
+# Создание пользователя validator
+sudo -u postgres psql -c "DO \$\$ BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'validator') THEN
+        CREATE ROLE validator WITH LOGIN PASSWORD 'val1dat0r';
+    END IF;
+END \$\$;"
+
+# Создание базы данных project-sem-1
+sudo -u postgres psql -c "DO \$\$ BEGIN
+    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'project-sem-1') THEN
+        CREATE DATABASE \"project-sem-1\" OWNER validator;
+    END IF;
+END \$\$;"
+
+# Назначение прав доступа на базу данных
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"project-sem-1\" TO validator;"
+
+# Создание таблицы prices
+sudo -u postgres psql -d "project-sem-1" -c "
 CREATE TABLE IF NOT EXISTS prices (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     category TEXT NOT NULL,
-    price NUMERIC(10, 2) NOT NULL,
+    price NUMERIC(10,2) NOT NULL,
     create_date DATE NOT NULL
 );"
 
-echo "Database setup completed successfully."
+echo "PostgreSQL setup completed successfully."
