@@ -28,14 +28,18 @@ var db *sql.DB
 // Инициализация подключения к базе данных
 func initDB() {
 	var err error
-	connStr := "user=validator password=val1dat0r dbname=project-sem-1 sslmode=disable"
+	connStr := "host=localhost port=5432 user=validator password=val1dat0r dbname=project-sem-1 sslmode=disable"
+	fmt.Println("Connecting to database with:", connStr)
+
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
+
 	if err = db.Ping(); err != nil {
 		log.Fatalf("Database not reachable: %v", err)
 	}
+
 	fmt.Println("Database connected successfully")
 }
 

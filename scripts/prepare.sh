@@ -1,46 +1,53 @@
 #!/bin/bash
 
-# Переменные
-DB_NAME="project-sem-1"
-DB_USER="validator"
-DB_PASSWORD="val1dat0r"
+set -e
 
 echo "Installing dependencies..."
-sudo apt update
-sudo apt install -y postgresql golang
+sudo apt-get update && sudo apt-get install -y golang postgresql-client
 
-echo "Starting PostgreSQL..."
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+DB_HOST="localhost"
+DB_PORT="5432"
+DB_USER="validator"
+DB_PASSWORD="val1dat0r"
+DB_NAME="project-sem-1"
 
-echo "Configuring PostgreSQL database..."
+echo "Checking PostgreSQL availability..."
+until PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c '\q' 2>/dev/null; do
+    echo "Waiting for PostgreSQL to start..."
+    sleep 1
+done
 
-# Создаем пользователя, если его нет
-sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1 || \
-sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
+echo "Creating database $DB_NAME if not exists..."
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 || \
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c "CREATE DATABASE \"$DB_NAME\" ENCODING 'UTF8';"
 
-# Создаем базу данных, если её нет
-sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 || \
-sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
+echo "Ensuring table prices exists..."
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d "$DB_NAME" -c "
+CREATE TABLE IF NOT EXISTS prices (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    price NUMERIC(10,2) NOT NULL,
+    create_date DATE NOT NULL
+);"
 
-# Предоставляем права на базу данных
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+echo "Adding test data if table is empty..."
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d "$DB_NAME" -c "
+INSERT INTO prices (name, category, price, create_date)
+SELECT 'Item 1', 'Category 1', 100.00, '2024-01-01'
+WHERE NOT EXISTS (SELECT 1 FROM prices LIMIT 1);"
 
-# Создаем таблицу, если её нет
-sudo -u postgres psql -d $DB_NAME -c "
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'prices') THEN
-        CREATE TABLE prices (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            category TEXT NOT NULL,
-            price NUMERIC(10,2) NOT NULL,
-            create_date DATE NOT NULL
-        );
-        GRANT ALL PRIVILEGES ON TABLE prices TO $DB_USER;
-    END IF;
-END
-\$\$;"
+echo "Starting Go server..."
+go run main.go &
 
-echo "Database and table setup completed successfully."
+for i in {1..10}; do
+    if curl -s http://localhost:8080 &>/dev/null; then
+        echo "Go server is ready."
+        exit 0
+    fi
+    echo "Waiting for Go server to start ($i/10)..."
+    sleep 2
+done
+
+echo "Error: Go server failed to start."
+exit 1

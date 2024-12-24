@@ -1,2 +1,6 @@
-datbase/
+database/
+localtests/
 docker-compose.yml
+uploaded.zip
+data.csv
+data.zip
