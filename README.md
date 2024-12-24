@@ -130,13 +130,13 @@ id,name,category,price,create_date
 `Тесты должны завершиться успешно. В случае ошибки будет выведено описание проблемы.`
 
 ## Переменные окружения
-|     Переменная	|       Описание      |    Значение   |
-| ---------------------------------------------------------
-|   POSTGRES_HOST	|   Хост базы данных  |   localhost   |
-|   POSTGRES_PORT	|   Порт базы данных  |     5432      |
-|    POSTGRES_DB	|   Имя базы данных   | project-sem-1 |
-|   POSTGRES_USER	|   Пользователь БД   |   validator   |
-| POSTGRES_PASSWORD	| Пароль пользователя |   val1dat0r   |
+| **Переменная**    | **Описание**       | **Значение**  |
+|:-----------------:|:------------------:|:-------------:|
+| POSTGRES_HOST     | Хост БД            | localhost     |
+| POSTGRES_PORT     | Порт БД            | 5432          |
+| POSTGRES_DB       | Имя БД             | project-sem-1 |
+| POSTGRES_USER     | Пользователь БД    | validator     |
+| POSTGRES_PASSWORD | Пароль пользоватея | val1dat0r     |
 
 ---
 
