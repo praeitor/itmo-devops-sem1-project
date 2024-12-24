@@ -142,7 +142,7 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	// Пишем заголовки
+	// Записываем заголовки в CSV
 	err = writer.Write([]string{"id", "name", "category", "price", "create_date"})
 	if err != nil {
 		http.Error(w, "Error writing CSV header", http.StatusInternalServerError)
@@ -189,8 +189,8 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	defer zipFile.Close()
 
 	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
 
+	// Добавляем CSV в архив
 	csvFile, err := os.Open("data.csv")
 	if err != nil {
 		http.Error(w, "Error opening CSV file for zipping", http.StatusInternalServerError)
@@ -210,9 +210,14 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	zipWriter.Close()
+	// Закрываем ZIP-архив
+	err = zipWriter.Close()
+	if err != nil {
+		http.Error(w, "Error closing ZIP file", http.StatusInternalServerError)
+		return
+	}
 
-	// Отправляем архив клиенту
+	// Отправляем ZIP клиенту
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
 	http.ServeFile(w, r, "data.zip")
