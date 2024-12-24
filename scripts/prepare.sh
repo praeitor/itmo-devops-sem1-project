@@ -9,7 +9,7 @@ DB_HOST="localhost"
 DB_PORT="5432"
 DB_USER="validator"
 DB_PASSWORD="val1dat0r"
-DB_NAME="project-sem-1"
+DB_NAME="project_sem_1"
 
 # Запуск PostgreSQL в GitHub Actions
 echo "Starting PostgreSQL service..."
