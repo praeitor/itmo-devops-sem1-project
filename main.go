@@ -131,7 +131,7 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 
 // Обработчик GET /api/v0/prices
 func handleGetPrices(w http.ResponseWriter, r *http.Request) {
-	// Создаем CSV файл
+	// Создание CSV-файла
 	csvFilePath := "data.csv"
 	csvFile, err := os.Create(csvFilePath)
 	if err != nil {
@@ -143,7 +143,7 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	writer := csv.NewWriter(csvFile)
 	defer writer.Flush()
 
-	// Записываем заголовки CSV
+	// Записываем заголовки в CSV
 	err = writer.Write([]string{"id", "name", "category", "price", "create_date"})
 	if err != nil {
 		http.Error(w, "Error writing CSV header", http.StatusInternalServerError)
@@ -181,7 +181,7 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем ZIP-архив
+	// Создание ZIP-архива
 	zipFilePath := "data.zip"
 	zipFile, err := os.Create(zipFilePath)
 	if err != nil {
@@ -218,24 +218,19 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Убедимся, что файл закрыт
-	zipFile.Close()
+	// Проверка файла перед отправкой
+	stat, err := os.Stat(zipFilePath)
+	if err != nil || stat.Size() == 0 {
+		http.Error(w, "ZIP file is empty or inaccessible", http.StatusInternalServerError)
+		return
+	}
 
-	// Отправляем ZIP клиенту
+	// Отправка файла клиенту
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileSize(zipFilePath)))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 
 	http.ServeFile(w, r, zipFilePath)
-}
-
-// fileSize возвращает размер файла
-func fileSize(path string) int64 {
-	info, err := os.Stat(path)
-	if err != nil {
-		return 0
-	}
-	return info.Size()
 }
 
 // Главная функция
