@@ -10,7 +10,7 @@ for i in {1..10}; do
         exit 0
     fi
     echo "Attempt $i: Server not ready..."
-    sleep 5
+    sleep 3
 done
 
 echo "Error: Server failed to start"

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Переменные
-DB_NAME="project_sem_1"
+DB_NAME="project-sem-1"
 DB_USER="validator"
 DB_PASSWORD="val1dat0r"
 
