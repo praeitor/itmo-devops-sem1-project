@@ -35,18 +35,18 @@ for i in {1..30}; do
     fi
 done
 
-# Применение миграций
+# Добавляем тестовые данные в базу
 echo "Applying database migrations..."
 echo `pwd` 
-MIGRATION_FILE="prices_table.sql"
-if [ ! -f "$MIGRATION_FILE" ]; then
-    echo "Migration file not found: $MIGRATION_FILE"
+PAYLOAD="prices_table.sql"
+if [ ! -f "$PAYLOAD" ]; then
+    echo "Payload file not found: $PAYLOAD"
     exit 1
 fi
 
-if ! psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$MIGRATION_FILE"; then
-    echo "Failed to apply migrations from $MIGRATION_FILE."
+if ! psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$PAYLOAD"; then
+    echo "Failed to apply payload from $PAYLOAD."
     exit 1
 fi
 
-echo "Database migrations applied successfully."
+echo "Payload applied successfully to database."
