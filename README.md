@@ -35,8 +35,6 @@
 ## Установка и запуск проекта
 
 1. Клонирование репозитория
-bash
-Копировать код
 `git clone https://github.com/your-repo/project.git
 cd project`
 
