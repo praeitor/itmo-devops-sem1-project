@@ -132,17 +132,18 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 // Обработчик GET /api/v0/prices
 func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	// Создаем CSV файл
-	file, err := os.Create("data.csv")
+	csvFilePath := "data.csv"
+	csvFile, err := os.Create(csvFilePath)
 	if err != nil {
 		http.Error(w, "Error creating CSV file", http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
+	defer csvFile.Close()
 
-	writer := csv.NewWriter(file)
+	writer := csv.NewWriter(csvFile)
 	defer writer.Flush()
 
-	// Записываем заголовки в CSV
+	// Записываем заголовки CSV
 	err = writer.Write([]string{"id", "name", "category", "price", "create_date"})
 	if err != nil {
 		http.Error(w, "Error writing CSV header", http.StatusInternalServerError)
@@ -181,7 +182,8 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Создаем ZIP-архив
-	zipFile, err := os.Create("data.zip")
+	zipFilePath := "data.zip"
+	zipFile, err := os.Create(zipFilePath)
 	if err != nil {
 		http.Error(w, "Error creating ZIP file", http.StatusInternalServerError)
 		return
@@ -190,13 +192,12 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 
 	zipWriter := zip.NewWriter(zipFile)
 
-	// Добавляем CSV в архив
-	csvFile, err := os.Open("data.csv")
+	csvFileForZip, err := os.Open(csvFilePath)
 	if err != nil {
 		http.Error(w, "Error opening CSV file for zipping", http.StatusInternalServerError)
 		return
 	}
-	defer csvFile.Close()
+	defer csvFileForZip.Close()
 
 	wr, err := zipWriter.Create("data.csv")
 	if err != nil {
@@ -204,23 +205,23 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = io.Copy(wr, csvFile)
+	_, err = io.Copy(wr, csvFileForZip)
 	if err != nil {
-		http.Error(w, "Error writing to zip", http.StatusInternalServerError)
+		http.Error(w, "Error writing to zip file", http.StatusInternalServerError)
 		return
 	}
 
-	// Закрываем ZIP-архив
+	// Закрываем ZIP-архив перед отправкой
 	err = zipWriter.Close()
 	if err != nil {
-		http.Error(w, "Error closing ZIP file", http.StatusInternalServerError)
+		http.Error(w, "Error finalizing zip file", http.StatusInternalServerError)
 		return
 	}
 
-	// Отправляем ZIP клиенту
+	// Отправляем архив клиенту
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
-	http.ServeFile(w, r, "data.zip")
+	http.ServeFile(w, r, zipFilePath)
 }
 
 // Главная функция
