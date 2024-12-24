@@ -33,10 +33,13 @@ for i in {1..30}; do
     fi
 done
 
+# Подключение к базе данных как пользователь postgres
+echo "Connecting to PostgreSQL as user 'postgres' to perform initial setup..."
+
 # Создание пользователя, если он не существует
 echo "Ensuring PostgreSQL user '$DB_USER' exists..."
 PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1 || \
-PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASSWORD';"
+PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
 
 # Создание базы данных, если она не существует
 echo "Ensuring PostgreSQL database '$DB_NAME' exists..."

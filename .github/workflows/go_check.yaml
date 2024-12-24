@@ -40,14 +40,16 @@ jobs:
         chmod +x scripts/run.sh
         chmod +x scripts/tests.sh
 
+    # Новый шаг для ожидания доступности PostgreSQL
     - name: Wait for PostgreSQL to be ready
       run: |
+        echo "Waiting for PostgreSQL to be ready..."
         for i in {1..30}; do
-          if pg_isready -h localhost -p 5432 -U validator; then
-            echo "PostgreSQL is ready."
+          if PGPASSWORD="val1dat0r" psql -h localhost -p 5432 -U validator -d "project-sem-1" -c '\q' 2>/dev/null; then
+            echo "PostgreSQL is ready and accepting connections."
             break
           fi
-          echo "Waiting for PostgreSQL to be ready ($i/30)..."
+          echo "PostgreSQL is not ready yet ($i/30). Retrying in 2 seconds..."
           sleep 2
         done
 
@@ -69,7 +71,7 @@ jobs:
         POSTGRES_USER: validator
         POSTGRES_PASSWORD: val1dat0r
 
-    - name: Run Tests
+    - name: Run Tests Level 1
       run: ./scripts/tests.sh 1
       env:
         POSTGRES_HOST: localhost
