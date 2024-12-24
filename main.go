@@ -211,17 +211,31 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Закрываем ZIP-архив перед отправкой
+	// Явно закрываем ZIP перед отправкой
 	err = zipWriter.Close()
 	if err != nil {
-		http.Error(w, "Error finalizing zip file", http.StatusInternalServerError)
+		http.Error(w, "Error closing ZIP file", http.StatusInternalServerError)
 		return
 	}
 
-	// Отправляем архив клиенту
+	// Убедимся, что файл закрыт
+	zipFile.Close()
+
+	// Отправляем ZIP клиенту
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileSize(zipFilePath)))
+
 	http.ServeFile(w, r, zipFilePath)
+}
+
+// fileSize возвращает размер файла
+func fileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 // Главная функция
