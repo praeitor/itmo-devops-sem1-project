@@ -38,7 +38,7 @@ done
 # Применение миграций
 echo "Applying database migrations..."
 echo `pwd` 
-MIGRATION_FILE="../prices_table.sql"
+MIGRATION_FILE="prices_table.sql"
 if [ ! -f "$MIGRATION_FILE" ]; then
     echo "Migration file not found: $MIGRATION_FILE"
     exit 1
