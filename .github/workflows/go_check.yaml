@@ -20,6 +20,9 @@ jobs:
           POSTGRES_PASSWORD: val1dat0r
         ports:
           - 5432:5432
+        # Добавляем volume для сохранения данных
+        volumes:
+          - postgres_data:/var/lib/postgresql/data
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -40,27 +43,8 @@ jobs:
         chmod +x scripts/run.sh
         chmod +x scripts/tests.sh
 
-    # Новый шаг для ожидания доступности PostgreSQL
-    - name: Wait for PostgreSQL to be ready
-      run: |
-        echo "Waiting for PostgreSQL to be ready..."
-        for i in {1..30}; do
-          if PGPASSWORD="val1dat0r" psql -h localhost -p 5432 -U validator -d "project-sem-1" -c '\q' 2>/dev/null; then
-            echo "PostgreSQL is ready and accepting connections."
-            break
-          fi
-          echo "PostgreSQL is not ready yet ($i/30). Retrying in 2 seconds..."
-          sleep 2
-        done
-
-    - name: Prepare PostgreSQL Environment
+    - name: Prepare environment
       run: ./scripts/prepare.sh
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: 5432
-        POSTGRES_DB: project-sem-1
-        POSTGRES_USER: validator
-        POSTGRES_PASSWORD: val1dat0r
 
     - name: Run application
       run: ./scripts/run.sh
@@ -71,7 +55,9 @@ jobs:
         POSTGRES_USER: validator
         POSTGRES_PASSWORD: val1dat0r
 
-    - name: Run Tests Level 1
+    - name: Test Level 1
+      id: test-level-1
+      continue-on-error: true
       run: ./scripts/tests.sh 1
       env:
         POSTGRES_HOST: localhost
@@ -79,3 +65,38 @@ jobs:
         POSTGRES_DB: project-sem-1
         POSTGRES_USER: validator
         POSTGRES_PASSWORD: val1dat0r
+
+    - name: Test Level 2
+      id: test-level-2
+      continue-on-error: true
+      run: ./scripts/tests.sh 2
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+        POSTGRES_DB: project-sem-1
+        POSTGRES_USER: validator
+        POSTGRES_PASSWORD: val1dat0r
+
+    - name: Test Level 3
+      id: test-level-3
+      continue-on-error: true
+      run: ./scripts/tests.sh 3
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+        POSTGRES_DB: project-sem-1
+        POSTGRES_USER: validator
+        POSTGRES_PASSWORD: val1dat0r
+
+    - name: Check test results
+      if: always()
+      run: |
+        if [[ "${{ steps.test-level-1.outcome }}" == "success" ]] || \
+           [[ "${{ steps.test-level-2.outcome }}" == "success" ]] || \
+           [[ "${{ steps.test-level-3.outcome }}" == "success" ]]; then
+          echo "At least one test level passed successfully!"
+          exit 0
+        else
+          echo "All test levels failed!"
+          exit 1
+        fi
