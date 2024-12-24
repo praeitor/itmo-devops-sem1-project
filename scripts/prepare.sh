@@ -37,7 +37,7 @@ done
 
 # Применение миграций
 echo "Applying database migrations..."
-MIGRATION_FILE="platform/storage/migrations/20241220_create_prices_table.sql"
+MIGRATION_FILE="prices_table.sql"
 if [ ! -f "$MIGRATION_FILE" ]; then
     echo "Migration file not found: $MIGRATION_FILE"
     exit 1
