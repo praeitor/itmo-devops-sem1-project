@@ -1,4 +1,4 @@
-database/
+/database/
 localtests/
 docker-compose.yml
 uploaded.zip
