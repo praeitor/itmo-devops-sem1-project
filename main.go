@@ -245,7 +245,6 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	w.Write(zipBytes)
 }
 
-// Главная функция
 func main() {
 	initDB()
 	r := mux.NewRouter()
