@@ -13,10 +13,10 @@ DB_USER="${POSTGRES_USER:-validator}"
 DB_PASSWORD="${POSTGRES_PASSWORD:-val1dat0r}"
 DB_NAME="${POSTGRES_DB:-project-sem-1}"
 
-# Проверка доступности PostgreSQL
+# Ожидание готовности PostgreSQL
 echo "Checking PostgreSQL availability on $DB_HOST:$DB_PORT..."
 for i in {1..30}; do
-    if PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c '\q' 2>/dev/null; then
+    if PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U "$DB_USER" -c '\q' 2>/dev/null; then
         echo "PostgreSQL is available and accepting connections."
         break
     fi
@@ -33,22 +33,22 @@ for i in {1..30}; do
     fi
 done
 
-# Проверка, существует ли пользователь
+# Создание пользователя, если он не существует
 echo "Ensuring PostgreSQL user '$DB_USER' exists..."
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1 || \
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASSWORD';"
+PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1 || \
+PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASSWORD';"
 
-# Проверка, существует ли база данных
+# Создание базы данных, если она не существует
 echo "Ensuring PostgreSQL database '$DB_NAME' exists..."
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 || \
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE DATABASE \"$DB_NAME\" OWNER $DB_USER;"
+PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 || \
+PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE DATABASE \"$DB_NAME\" OWNER $DB_USER;"
 
-# Назначение прав
+# Назначение прав доступа
 echo "Granting privileges on database '$DB_NAME' to user '$DB_USER'..."
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE \"$DB_NAME\" TO $DB_USER;"
+PGPASSWORD=$POSTGRES_PASSWORD psql -h $DB_HOST -p $DB_PORT -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE \"$DB_NAME\" TO $DB_USER;"
 
-# Создание таблицы
-echo "Creating table 'prices' in database '$DB_NAME'..."
+# Создание таблицы prices
+echo "Ensuring table 'prices' exists in database '$DB_NAME'..."
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d "$DB_NAME" -c "
 CREATE TABLE IF NOT EXISTS prices (
     id SERIAL PRIMARY KEY,
