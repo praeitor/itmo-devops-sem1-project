@@ -34,8 +34,8 @@
 
 1. Клонирование репозитория
 ```
-git clone https://github.com/your-repo/project.git
-cd project
+git clone https://github.com/praeitor/itmo-devops-sem1-project.git
+cd itmo-devops-sem1-project
 ```
 
 2. Подготовка окружения
