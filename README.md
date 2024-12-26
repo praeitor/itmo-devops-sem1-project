@@ -1,3 +1,5 @@
+[![Go Test Pipeline](https://github.com/praeitor/itmo-devops-sem1-project/actions/workflows/go_check.yaml/badge.svg?branch=main)](https://github.com/praeitor/itmo-devops-sem1-project/actions/workflows/go_check.yaml)
+
 # Требования к системе
 
 ## Операционная система  
