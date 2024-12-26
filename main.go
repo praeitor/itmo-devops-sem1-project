@@ -302,6 +302,6 @@ func main() {
 	r.HandleFunc("/api/v0/prices", handlePostPrices).Methods("POST")
 	r.HandleFunc("/api/v0/prices", handleGetPrices).Methods("GET")
 
-	fmt.Println("🚀 Server is running on :8080")
+	fmt.Println("Server is running on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
