@@ -78,10 +78,10 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 	}
 	defer zipReader.Close()
 
-	var totalItems int
-	var totalPrice float64
-	categorySet := make(map[string]bool)
+	// Буфер для данных
+	var records [][]string
 
+	// Чтение и валидация данных
 	for _, f := range zipReader.File {
 		if f.Name == "data.csv" || f.Name == "test_data.csv" {
 			csvFile, err := f.Open()
@@ -92,39 +92,69 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 			defer csvFile.Close()
 
 			reader := csv.NewReader(csvFile)
-			_, err = reader.Read() // Пропускаем заголовок
-			if err != nil {
-				http.Error(w, "Error reading CSV header", http.StatusInternalServerError)
-				return
-			}
+			_, _ = reader.Read() // Пропускаем заголовок
 
 			for {
 				record, err := reader.Read()
 				if err != nil {
-					break
-				}
-
-				price, err := strconv.ParseFloat(record[3], 64)
-				if err != nil {
-					log.Printf("Skipping invalid price: %s", record[3])
-					continue
-				}
-				category := record[2]
-
-				_, err = db.Exec("INSERT INTO prices (id, name, category, price, create_date) VALUES ($1, $2, $3, $4, $5)",
-					record[0], record[1], category, price, record[4])
-				if err != nil {
-					log.Printf("Failed to insert record: %v", err)
+					if err == io.EOF {
+						break
+					}
+					log.Println("Error reading CSV row:", err)
 					continue
 				}
 
-				totalItems++
-				totalPrice += price
-				categorySet[category] = true
+				// Валидация
+				if len(record) < 5 {
+					log.Println("Skipping invalid record:", record)
+					continue
+				}
+				if _, err := strconv.ParseFloat(record[3], 64); err != nil {
+					log.Println("Skipping invalid price:", record[3])
+					continue
+				}
+
+				records = append(records, record)
 			}
 		}
 	}
 
+	// Вставка данных в БД
+	var totalItems int
+	var totalPrice float64
+	categorySet := make(map[string]bool)
+
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, "Failed to start transaction", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	for _, record := range records {
+		price, _ := strconv.ParseFloat(record[3], 64)
+		category := record[2]
+
+		_, err = tx.Exec(
+			"INSERT INTO prices (id, name, category, price, create_date) VALUES ($1, $2, $3, $4, $5)",
+			record[0], record[1], category, price, record[4],
+		)
+		if err != nil {
+			log.Println("Failed to insert record:", err)
+			continue
+		}
+
+		totalItems++
+		totalPrice += price
+		categorySet[category] = true
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+		return
+	}
+
+	// Ответ пользователю
 	summary := Summary{
 		TotalItems:      totalItems,
 		TotalCategories: len(categorySet),
