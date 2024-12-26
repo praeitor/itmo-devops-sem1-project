@@ -247,8 +247,20 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	w.Write(zipBytes)
 }
 
+func closeDB() {
+	if db != nil {
+		err := db.Close()
+		if err != nil {
+			log.Printf("Error closing database connection: %v", err)
+		} else {
+			fmt.Println("Database connection closed successfully")
+		}
+	}
+}
+
 func main() {
 	initDB()
+	defer closeDB() // Закрываем соединение с БД при завершении программы
 	r := mux.NewRouter()
 	r.HandleFunc("/api/v0/prices", handlePostPrices).Methods("POST")
 	r.HandleFunc("/api/v0/prices", handleGetPrices).Methods("GET")
