@@ -135,129 +135,116 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(summary)
 }
 
-// Обработчик POST /api/v0/prices
-func handlePostPrices(w http.ResponseWriter, r *http.Request) {
-	r.ParseMultipartForm(MaxUploadSize)
-	file, _, err := r.FormFile("file")
+// Обработчик GET /api/v0/prices
+func handleGetPrices(w http.ResponseWriter, r *http.Request) {
+	// Создаем CSV файл
+	csvFilePath := "data.csv"
+	csvFile, err := os.Create(csvFilePath)
 	if err != nil {
-		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+		http.Error(w, "Error creating CSV file", http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
+	defer csvFile.Close()
 
-	// Сохраняем zip-файл
-	zipFilePath := "uploaded.zip"
-	tempFile, err := os.Create(zipFilePath)
-	if err != nil {
-		http.Error(w, "Error creating temporary file", http.StatusInternalServerError)
-		return
-	}
-	defer tempFile.Close()
+	writer := csv.NewWriter(csvFile)
+	defer writer.Flush()
 
-	_, err = io.Copy(tempFile, file)
+	// Записываем заголовки CSV
+	err = writer.Write([]string{"id", "name", "category", "price", "create_date"})
 	if err != nil {
-		http.Error(w, "Error saving file", http.StatusInternalServerError)
+		http.Error(w, "Error writing CSV header", http.StatusInternalServerError)
 		return
 	}
 
-	// Открываем zip-файл
-	zipReader, err := zip.OpenReader(zipFilePath)
+	// Извлекаем данные из базы данных
+	rows, err := db.Query("SELECT id, name, category, price, create_date FROM prices")
 	if err != nil {
-		http.Error(w, "Error reading zip file", http.StatusInternalServerError)
+		http.Error(w, "Error fetching data from database", http.StatusInternalServerError)
 		return
 	}
-	defer zipReader.Close()
+	defer rows.Close()
 
-	var records [][]string
-	var totalItems int
-	var totalPrice float64
-	categorySet := make(map[string]bool)
+	for rows.Next() {
+		var id, name, category, createDate string
+		var price float64
 
-	// Читаем и валидируем CSV-файл
-	for _, f := range zipReader.File {
-		if f.Name == "data.csv" || f.Name == "test_data.csv" {
-			csvFile, err := f.Open()
-			if err != nil {
-				http.Error(w, "Error opening CSV file", http.StatusInternalServerError)
-				return
-			}
-			defer csvFile.Close()
-
-			reader := csv.NewReader(csvFile)
-			_, err = reader.Read() // Пропускаем заголовок
-			if err != nil {
-				http.Error(w, "Error reading CSV header", http.StatusInternalServerError)
-				return
-			}
-
-			for {
-				record, err := reader.Read()
-				if err != nil {
-					if err == io.EOF {
-						break
-					}
-					log.Printf("Error reading CSV row: %v", err)
-					continue
-				}
-
-				// Валидация записи
-				if len(record) < 5 {
-					log.Printf("Skipping invalid record: %v", record)
-					continue
-				}
-
-				_, err = strconv.ParseFloat(record[3], 64)
-				if err != nil {
-					log.Printf("Skipping invalid price: %s", record[3])
-					continue
-				}
-
-				records = append(records, record)
-			}
-		}
-	}
-
-	// Вставка данных в базу данных
-	tx, err := db.Begin()
-	if err != nil {
-		http.Error(w, "Failed to start transaction", http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback()
-
-	for _, record := range records {
-		price, _ := strconv.ParseFloat(record[3], 64)
-		category := record[2]
-
-		_, err = tx.Exec(
-			"INSERT INTO prices (id, name, category, price, create_date) VALUES ($1, $2, $3, $4, $5)",
-			record[0], record[1], category, price, record[4],
-		)
+		err = rows.Scan(&id, &name, &category, &price, &createDate)
 		if err != nil {
-			log.Printf("Failed to insert record: %v", err)
-			continue
+			http.Error(w, "Error reading row from database", http.StatusInternalServerError)
+			return
 		}
 
-		totalItems++
-		totalPrice += price
-		categorySet[category] = true
+		err = writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), createDate})
+		if err != nil {
+			http.Error(w, "Error writing row to CSV", http.StatusInternalServerError)
+			return
+		}
 	}
 
-	// Завершаем транзакцию
-	if err := tx.Commit(); err != nil {
-		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		http.Error(w, "Error finalizing CSV file", http.StatusInternalServerError)
 		return
 	}
 
-	// Формируем ответ
-	summary := Summary{
-		TotalItems:      totalItems,
-		TotalCategories: len(categorySet),
-		TotalPrice:      totalPrice,
+	// Создаем ZIP-архив
+	zipFilePath := "data.zip"
+	zipFile, err := os.Create(zipFilePath)
+	if err != nil {
+		http.Error(w, "Error creating ZIP file", http.StatusInternalServerError)
+		return
+	}
+	defer zipFile.Close()
+
+	zipWriter := zip.NewWriter(zipFile)
+
+	// Открываем CSV для архива
+	csvFileForZip, err := os.Open(csvFilePath)
+	if err != nil {
+		http.Error(w, "Error opening CSV file for zipping", http.StatusInternalServerError)
+		return
+	}
+	defer csvFileForZip.Close()
+
+	wr, err := zipWriter.Create("data.csv")
+	if err != nil {
+		http.Error(w, "Error creating zip entry", http.StatusInternalServerError)
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summary)
+	_, err = io.Copy(wr, csvFileForZip)
+	if err != nil {
+		http.Error(w, "Error writing to zip file", http.StatusInternalServerError)
+		return
+	}
+
+	// Явно закрываем ZIP перед отправкой
+	err = zipWriter.Close()
+	if err != nil {
+		http.Error(w, "Error closing ZIP file", http.StatusInternalServerError)
+		return
+	}
+
+	// Проверяем размер файла
+	stat, err := os.Stat(zipFilePath)
+	if err != nil || stat.Size() == 0 {
+		http.Error(w, "ZIP file is empty or inaccessible", http.StatusInternalServerError)
+		return
+	}
+
+	// Читаем ZIP в память для отправки
+	zipBytes, err := os.ReadFile(zipFilePath)
+	if err != nil {
+		http.Error(w, "Error reading ZIP file", http.StatusInternalServerError)
+		return
+	}
+
+	// Устанавливаем заголовки и отправляем файл
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(zipBytes)))
+
+	w.Write(zipBytes)
 }
 
 func closeDB() {
