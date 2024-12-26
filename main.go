@@ -137,7 +137,57 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 
 // Обработчик GET /api/v0/prices
 func handleGetPrices(w http.ResponseWriter, r *http.Request) {
-	// Создаем CSV файл
+	// 1. Считываем данные из базы
+	rows, err := db.Query("SELECT id, name, category, price, create_date FROM prices")
+	if err != nil {
+		http.Error(w, "Error fetching data from database", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	// Слайс для хранения прочитанных данных
+	var data []struct {
+		ID         string
+		Name       string
+		Category   string
+		Price      float64
+		CreateDate string
+	}
+
+	for rows.Next() {
+		var (
+			id, name, category, createDate string
+			price                          float64
+		)
+
+		err = rows.Scan(&id, &name, &category, &price, &createDate)
+		if err != nil {
+			http.Error(w, "Error reading row from database", http.StatusInternalServerError)
+			return
+		}
+
+		data = append(data, struct {
+			ID         string
+			Name       string
+			Category   string
+			Price      float64
+			CreateDate string
+		}{
+			ID:         id,
+			Name:       name,
+			Category:   category,
+			Price:      price,
+			CreateDate: createDate,
+		})
+	}
+
+	// Очень важно проверить rows.Err() после цикла
+	if err = rows.Err(); err != nil {
+		http.Error(w, "Error while iterating rows from database", http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Создаём CSV файл
 	csvFilePath := "data.csv"
 	csvFile, err := os.Create(csvFilePath)
 	if err != nil {
@@ -156,38 +206,29 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Извлекаем данные из базы данных
-	rows, err := db.Query("SELECT id, name, category, price, create_date FROM prices")
-	if err != nil {
-		http.Error(w, "Error fetching data from database", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var id, name, category, createDate string
-		var price float64
-
-		err = rows.Scan(&id, &name, &category, &price, &createDate)
-		if err != nil {
-			http.Error(w, "Error reading row from database", http.StatusInternalServerError)
-			return
-		}
-
-		err = writer.Write([]string{id, name, category, fmt.Sprintf("%.2f", price), createDate})
+	// 3. Записываем все прочитанные ранее данные в CSV
+	for _, row := range data {
+		err = writer.Write([]string{
+			row.ID,
+			row.Name,
+			row.Category,
+			fmt.Sprintf("%.2f", row.Price),
+			row.CreateDate,
+		})
 		if err != nil {
 			http.Error(w, "Error writing row to CSV", http.StatusInternalServerError)
 			return
 		}
 	}
 
+	// Завершаем запись и проверяем на ошибку
 	writer.Flush()
 	if err := writer.Error(); err != nil {
 		http.Error(w, "Error finalizing CSV file", http.StatusInternalServerError)
 		return
 	}
 
-	// Создаем ZIP-архив
+	// 4. Создаём ZIP-архив с нашим CSV
 	zipFilePath := "data.zip"
 	zipFile, err := os.Create(zipFilePath)
 	if err != nil {
@@ -198,7 +239,6 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 
 	zipWriter := zip.NewWriter(zipFile)
 
-	// Открываем CSV для архива
 	csvFileForZip, err := os.Open(csvFilePath)
 	if err != nil {
 		http.Error(w, "Error opening CSV file for zipping", http.StatusInternalServerError)
@@ -218,28 +258,25 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Явно закрываем ZIP перед отправкой
 	err = zipWriter.Close()
 	if err != nil {
 		http.Error(w, "Error closing ZIP file", http.StatusInternalServerError)
 		return
 	}
 
-	// Проверяем размер файла
+	// 5. Проверяем размер и отправляем файл
 	stat, err := os.Stat(zipFilePath)
 	if err != nil || stat.Size() == 0 {
 		http.Error(w, "ZIP file is empty or inaccessible", http.StatusInternalServerError)
 		return
 	}
 
-	// Читаем ZIP в память для отправки
 	zipBytes, err := os.ReadFile(zipFilePath)
 	if err != nil {
 		http.Error(w, "Error reading ZIP file", http.StatusInternalServerError)
 		return
 	}
 
-	// Устанавливаем заголовки и отправляем файл
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", "attachment; filename=data.zip")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(zipBytes)))
