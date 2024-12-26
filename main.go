@@ -43,9 +43,11 @@ func initDB() {
 	fmt.Println("Database connected successfully")
 }
 
+const MaxUploadSize = 10 << 20 // Ограничение на размер файла 10MB
+
 // Обработчик POST /api/v0/prices
 func handlePostPrices(w http.ResponseWriter, r *http.Request) {
-	r.ParseMultipartForm(10 << 20) // Ограничение на размер файла 10MB
+	r.ParseMultipartForm(MaxUploadSize)
 	file, _, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
