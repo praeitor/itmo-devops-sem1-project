@@ -226,7 +226,6 @@ func handlePostPrices(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(summary)
-	// При отсутствии err транзакция зафиксируется (COMMIT).
 }
 
 // Обработчик GET /api/v0/prices
@@ -374,7 +373,7 @@ func handleGetPrices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", "attachment; filename=response.zip") // Изменено имя файла
+	w.Header().Set("Content-Disposition", "attachment; filename=response.zip")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(zipBytes)))
 
 	w.Write(zipBytes)
@@ -397,7 +396,7 @@ func main() {
 
 	// Регистрация маршрутов с явным указанием методов "GET" и "HEAD"
 	r.HandleFunc("/api/v0/prices", handlePostPrices).Methods("POST")
-	r.HandleFunc("/api/v0/prices", handleGetPrices).Methods("GET", "HEAD") // Добавлено "HEAD"
+	r.HandleFunc("/api/v0/prices", handleGetPrices).Methods("GET", "HEAD")
 
 	// Обработка неразрешённых методов
 	r.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
